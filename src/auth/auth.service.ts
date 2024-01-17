@@ -13,6 +13,7 @@ import { MailService } from "src/mailer/mailer.service"
 import { CreateUserDto } from "./dto/create-auth.dto"
 import { User } from "./entities/auth.entity"
 import { SigninDto } from "./dto/signin.dto"
+import { ResetDto } from "./dto/reset-dto"
 
 interface Payload {
 	email: string
@@ -83,6 +84,37 @@ export class AuthService {
 				throw new BadRequestException("This token has expired!")
 			}
 			return { messagfe: "User verified!" }
+		} catch (error) {
+			throw new BadRequestException(error, "Internal server error")
+		}
+	}
+
+	async forgotPassword(email: string) {
+		try {
+			const user = await this.userModel.findOne({ email })
+			if (!user) {
+				throw new NotFoundException("User does not exists!")
+			}
+			const token = (Math.random() + 1).toString(32).substring(2)
+			await this.userModel.updateOne({ email }, { token })
+			await this.mailerService.passwordResetMail(user, token)
+			return { message: "Reset password mail sent!" }
+		} catch (error) {
+			throw new BadRequestException(error, "Internal server error")
+		}
+	}
+
+	async resetPassword(payload: ResetDto) {
+		try {
+			const { password, token } = payload
+			const user = await this.userModel.findOne({ token })
+			if (!user) {
+				throw new BadRequestException("This token has expired!")
+			}
+			const salt = await bcrypt.genSalt(10)
+			const hashedPassword = await bcrypt.hash(password, salt)
+			await this.userModel.updateOne({ token }, { password: hashedPassword })
+			return { message: "Password reset successful!" }
 		} catch (error) {
 			throw new BadRequestException(error, "Internal server error")
 		}
